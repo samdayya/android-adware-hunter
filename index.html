@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
+<title>Android Adware Hunter PRO</title>
+<style>
+  :root {
+    --bg: #1e1e2e; --surface: #282840; --border: #3a3a5c;
+    --text: #e0e0e0; --muted: #888; --accent: #7c5cfc;
+    --green: #4caf50; --red: #e53935; --yellow: #fbc02d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; }
+
+  header { background: var(--surface); padding: 14px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 16px; }
+  header h1 { font-size: 1.3rem; font-weight: 700; }
+  #status { font-size: .85rem; padding: 4px 12px; border-radius: 12px; background: var(--border); }
+  #status.ok { background: var(--green); color: #fff; }
+  #status.fail { background: var(--red); color: #fff; }
+
+  .container { display: flex; flex: 1; overflow: hidden; }
+
+  /* ── Left panel ── */
+  .left { flex: 2; display: flex; flex-direction: column; border-right: 1px solid var(--border); padding: 12px; gap: 8px; }
+  .left h2 { font-size: 1rem; font-weight: 600; }
+  #search { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font-size: .95rem; }
+  #search:focus { outline: none; border-color: var(--accent); }
+  #app-list { flex: 1; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
+  .app-item { padding: 8px 12px; cursor: pointer; border-bottom: 1px solid var(--border); font-size: .9rem; display: flex; justify-content: space-between; align-items: center; }
+  .app-item:hover { background: var(--border); }
+  .app-item.selected { background: var(--accent); color: #fff; }
+  .app-item.uninstalled { color: var(--red); text-decoration: line-through; }
+  .app-item .resolved { color: var(--yellow); font-weight: 600; margin-right: 6px; }
+  .app-count { font-size: .8rem; color: var(--muted); }
+
+  /* ── Right panel ── */
+  .right { flex: 1; display: flex; flex-direction: column; padding: 12px; gap: 8px; min-width: 280px; }
+  .right label { font-size: .8rem; color: var(--muted); }
+  #pkg-input { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font-size: .9rem; }
+  #bridge-url { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font-size: .85rem; }
+  #bridge-status { font-size: .78rem; color: var(--muted); }
+  #bridge-status.ok { color: var(--green); }
+  #bridge-status.fail { color: var(--red); }
+  #btn-connect-bridge { display: none; }
+  #btn-connect-bridge.show { display: block; }
+  .btn { width: 100%; padding: 10px; border: none; border-radius: 6px; font-size: .9rem; font-weight: 600; cursor: pointer; transition: opacity .15s; }
+  .btn:hover { opacity: .85; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-green { background: var(--green); color: #fff; }
+  .btn-red { background: var(--red); color: #fff; }
+  .btn-yellow { background: var(--yellow); color: #222; }
+  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+
+  /* ── Progress ── */
+  .progress { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .progress-bar { height: 100%; width: 30%; background: var(--accent); animation: indeterminate 1.2s infinite ease-in-out; display: none; }
+  @keyframes indeterminate { 0% { transform: translateX(-100%); } 100% { transform: translateX(400%); } }
+  .progress-bar.active { display: block; }
+
+  /* ── Context menu ── */
+  .ctx-menu { position: fixed; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px 0; min-width: 200px; z-index: 999; box-shadow: 0 8px 24px rgba(0,0,0,.4); display: none; }
+  .ctx-menu.show { display: block; }
+  .ctx-item { padding: 8px 16px; cursor: pointer; font-size: .9rem; }
+  .ctx-item:hover { background: var(--border); }
+  .ctx-sep { height: 1px; background: var(--border); margin: 4px 0; }
+
+  /* ── Modal ── */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 1000; display: none; align-items: center; justify-content: center; }
+  .modal-overlay.show { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: 90%; max-width: 620px; max-height: 80vh; display: flex; flex-direction: column; }
+  .modal-header { padding: 14px 18px; border-bottom: 1px solid var(--border); font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
+  .modal-body { padding: 16px 18px; overflow-y: auto; flex: 1; white-space: pre-wrap; font-size: .9rem; line-height: 1.6; }
+  .modal-close { background: none; border: none; color: var(--text); font-size: 1.3rem; cursor: pointer; }
+
+  /* ── Toasts (baix dreta) ── */
+  #toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 2000; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; pointer-events: none; }
+  .toast { padding: 10px 18px; border-radius: 8px; font-size: .88rem; font-weight: 500; color: #fff; box-shadow: 0 4px 16px rgba(0,0,0,.4); opacity: 0; transform: translateY(12px); transition: opacity .3s, transform .3s; max-width: 320px; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.info  { background: var(--accent); }
+  .toast.ok    { background: var(--green); }
+  .toast.error { background: var(--red); }
+  .toast.warn  { background: var(--yellow); color: #222; }
+
+  /* ── Toasts (dalt dreta, entra de dreta a esquerra) ── */
+  #toast-top-container { position: fixed; top: 24px; right: 24px; z-index: 2000; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; pointer-events: none; }
+  .toast-top { padding: 12px 20px; border-radius: 8px; font-size: .92rem; font-weight: 600; color: #fff; box-shadow: 0 4px 20px rgba(0,0,0,.45); opacity: 0; transform: translateX(120%); transition: opacity .35s, transform .35s cubic-bezier(.22,.61,.36,1); max-width: 340px; }
+  .toast-top.show { opacity: 1; transform: translateX(0); }
+  .toast-top.ok    { background: var(--green); }
+  .toast-top.error { background: var(--red); }
+
+  /* ── Device info card ── */
+  #device-info { display: none; margin-top: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: .82rem; line-height: 1.8; color: var(--text); }
+  #device-info.show { display: block; }
+  #device-info .di-title { font-weight: 700; font-size: .9rem; margin-bottom: 6px; color: var(--accent); }
+  #device-info .di-row { display: flex; gap: 6px; }
+  #device-info .di-key { color: var(--muted); min-width: 110px; flex-shrink: 0; }
+  #device-info .di-val { color: var(--text); word-break: break-all; }
+
+  /* ── Confirm flotant ── */
+  #confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 1500; display: none; align-items: center; justify-content: center; }
+  #confirm-overlay.show { display: flex; }
+  #confirm-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px 20px; max-width: 360px; width: 90%; display: flex; flex-direction: column; gap: 16px; }
+  #confirm-msg { font-size: .95rem; line-height: 1.5; }
+  #confirm-btns { display: flex; gap: 10px; }
+  #confirm-btns .btn { flex: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Android Adware Hunter PRO</h1>
+  <span id="status">No verificat</span>
+  <div style="flex:1"></div>
+  <button class="btn btn-outline" onclick="checkDevice()" style="width:auto;padding:6px 16px">Comprovar dispositiu</button>
+</header>
+
+<div class="progress"><div class="progress-bar" id="progress"></div></div>
+
+<div class="container">
+  <!-- LEFT -->
+  <div class="left">
+    <h2>Aplicacions instal·lades <span class="app-count" id="app-count"></span></h2>
+    <input type="text" id="search" placeholder="Cercar apps…" oninput="filterApps()">
+    <div id="app-list"></div>
+    <button class="btn btn-primary" id="btn-list" disabled onclick="listApps()">Llistar apps</button>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="right">
+    <label>ADB local (ordinador client)</label>
+    <input type="text" id="bridge-url" placeholder="http://127.0.0.1:5038" onblur="saveBridgeUrl()" onkeydown="if(event.key==='Enter')saveBridgeUrl()">
+    <div id="bridge-status">Sense provar</div>
+    <button class="btn btn-primary" id="btn-connect-bridge" onclick="connectLocalAdb()">Connecta ADB local</button>
+    <label>Package seleccionat</label>
+    <input type="text" id="pkg-input" readonly>
+    <button class="btn btn-outline" onclick="detectForeground()">Detectar app en foreground</button>
+    <button class="btn btn-yellow" onclick="getInfo()">Obtenir informació</button>
+    <button class="btn btn-outline" onclick="killProcess()">Matar procés</button>
+    <button class="btn btn-red" onclick="uninstallPkg()">Desinstal·lar package</button>
+    <div id="device-info"></div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<div id="toast-top-container"></div>
+
+<div id="confirm-overlay">
+  <div id="confirm-box">
+    <div id="confirm-msg"></div>
+    <div id="confirm-btns">
+      <button class="btn btn-outline" id="confirm-no">Cancel·lar</button>
+      <button class="btn btn-red" id="confirm-yes">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Context menu -->
+<div class="ctx-menu" id="ctx-menu">
+  <div class="ctx-item" onclick="getInfo()">Obtenir informació</div>
+  <div class="ctx-item" onclick="killProcess()">Matar procés</div>
+  <div class="ctx-item" onclick="startProcess()">Iniciar procés</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" style="color:var(--red)" onclick="uninstallPkg()">Desinstal·lar app</div>
+</div>
+
+<!-- Info modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span id="modal-title">Informació</span>
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const progress = $('#progress');
+const appList = $('#app-list');
+const pkgInput = $('#pkg-input');
+const statusEl = $('#status');
+const searchInput = $('#search');
+const ctxMenu = $('#ctx-menu');
+const bridgeUrlInput = $('#bridge-url');
+const bridgeStatus = $('#bridge-status');
+const connectBridgeBtn = $('#btn-connect-bridge');
+
+const BRIDGE_KEY = 'adb_bridge_url';
+const LOCAL_ADB_PATHS = new Set([
+  '/api/check-device', '/api/list-apps', '/api/foreground',
+  '/api/kill', '/api/start', '/api/uninstall', '/api/device-info'
+]);
+
+let allApps = [];          // [{pkg, name}]
+let selectedPkg = null;
+let deviceOk = false;
+let bridgeUrl = normalizeBridgeUrl(localStorage.getItem(BRIDGE_KEY) || 'http://127.0.0.1:5038');
+
+// ── Helpers ──
+
+function showProgress() { progress.classList.add('active'); }
+function hideProgress() { progress.classList.remove('active'); }
+
+function toast(msg, type = 'info', duration = 3500) {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  $('#toast-container').appendChild(el);
+  requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('show')));
+  setTimeout(() => {
+    el.classList.remove('show');
+    el.addEventListener('transitionend', () => el.remove(), { once: true });
+  }, duration);
+}
+
+function toastTop(msg, type = 'ok', duration = 5000) {
+  const el = document.createElement('div');
+  el.className = `toast-top ${type}`;
+  el.textContent = msg;
+  $('#toast-top-container').appendChild(el);
+  requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('show')));
+  setTimeout(() => {
+    el.classList.remove('show');
+    el.addEventListener('transitionend', () => el.remove(), { once: true });
+  }, duration);
+}
+
+function showConfirm(msg, onYes) {
+  $('#confirm-msg').textContent = msg;
+  $('#confirm-overlay').classList.add('show');
+  const close = () => $('#confirm-overlay').classList.remove('show');
+  $('#confirm-yes').onclick = () => { close(); onYes(); };
+  $('#confirm-no').onclick = close;
+}
+
+async function api(path, opts) {
+  showProgress();
+  try {
+    const url = LOCAL_ADB_PATHS.has(path) ? `${bridgeUrl}${path}` : path;
+    const r = await fetch(url, opts);
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok && !data.error) data.error = `HTTP ${r.status}`;
+    return data;
+  } catch (err) {
+    return { error: err?.message || 'Error de xarxa' };
+  } finally { hideProgress(); }
+}
+
+function normalizeBridgeUrl(url) {
+  return (url || '').trim().replace(/\/$/, '');
+}
+
+function setBridgeStatus(ok, text) {
+  bridgeStatus.textContent = text;
+  bridgeStatus.className = ok ? 'ok' : 'fail';
+  connectBridgeBtn.classList.toggle('show', !ok);
+}
+
+async function connectLocalAdb() {
+  const command = ['cd C:\\temp', 'py -3 adb_bridge.py'].join('\n');
+  let copied = false;
+  try {
+    await navigator.clipboard.writeText(command);
+    copied = true;
+  } catch {}
+
+  const lines = [
+    'El navegador no pot executar programes locals directament per seguretat.',
+    '',
+    'Passos a l\'ordinador client Windows:',
+    '1. Obre PowerShell.',
+    '2. Ves a C:\\temp.',
+    '3. Executa aquestes ordres:',
+    '',
+    command,
+    '',
+    'Quan el bridge estigui actiu, torna a clicar "Comprovar dispositiu".'
+  ];
+
+  if (copied) {
+    lines.push('', 'Les ordres s\'han copiat al porta-retalls.');
+  }
+
+  showModal('Connecta ADB local', lines.join('\n'));
+}
+
+async function probeBridge() {
+  const data = await api('/api/check-device');
+  if (data.error) {
+    setBridgeStatus(false, `No es troba la connexió amb ADB local (${bridgeUrl})`);
+    return;
+  }
+  setBridgeStatus(true, `ADB local operatiu (${bridgeUrl})`);
+}
+
+async function saveBridgeUrl() {
+  const next = normalizeBridgeUrl(bridgeUrlInput.value);
+  if (!next) {
+    setBridgeStatus(false, 'URL invàlida');
+    return;
+  }
+  bridgeUrl = next;
+  localStorage.setItem(BRIDGE_KEY, bridgeUrl);
+  await probeBridge();
+}
+
+function selectPkg(pkg) {
+  selectedPkg = pkg;
+  pkgInput.value = pkg || '';
+  appList.querySelectorAll('.app-item').forEach(el => {
+    el.classList.toggle('selected', el.dataset.pkg === pkg);
+  });
+}
+
+// ── Render ──
+
+function renderApps(apps) {
+  const query = searchInput.value.toLowerCase();
+  appList.innerHTML = '';
+  let shown = 0;
+  for (const a of apps) {
+    const display = a.name ? `${a.name} - ${a.pkg}` : a.pkg;
+    if (query && !display.toLowerCase().includes(query)) continue;
+    shown++;
+    const div = document.createElement('div');
+    div.className = 'app-item';
+    div.dataset.pkg = a.pkg;
+    if (a.name) {
+      div.innerHTML = `<span><span class="resolved">${esc(a.name)}</span>${esc(a.pkg)}</span>`;
+    } else {
+      div.textContent = a.pkg;
+    }
+    div.onclick = () => selectPkg(a.pkg);
+    div.oncontextmenu = e => { e.preventDefault(); selectPkg(a.pkg); showCtx(e); };
+    appList.appendChild(div);
+  }
+  $('#app-count').textContent = `(${shown})`;
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function filterApps() { renderApps(allApps); }
+
+function markUninstalled(pkg) {
+  appList.querySelectorAll('.app-item').forEach(el => {
+    if (el.dataset.pkg === pkg) el.classList.add('uninstalled');
+  });
+}
+
+// ── Context menu ──
+
+function showCtx(e) {
+  ctxMenu.style.left = '-9999px';
+  ctxMenu.style.top = '-9999px';
+  ctxMenu.classList.add('show');
+  const menuH = ctxMenu.offsetHeight;
+  const menuW = ctxMenu.offsetWidth;
+  const top = (e.clientY + menuH > window.innerHeight) ? e.clientY - menuH : e.clientY;
+  const left = (e.clientX + menuW > window.innerWidth) ? e.clientX - menuW : e.clientX;
+  ctxMenu.style.top = top + 'px';
+  ctxMenu.style.left = left + 'px';
+}
+document.addEventListener('click', () => ctxMenu.classList.remove('show'));
+
+// ── Modal ──
+
+function showModal(title, body) {
+  $('#modal-title').textContent = title;
+  $('#modal-body').textContent = body;
+  $('#modal').classList.add('show');
+}
+function closeModal() { $('#modal').classList.remove('show'); }
+
+// ── API calls ──
+
+async function checkDevice() {
+  const data = await api('/api/check-device');
+  if (data.error) {
+    deviceOk = false;
+    statusEl.textContent = `Error: ${data.error}`;
+    statusEl.className = 'fail';
+    $('#btn-list').disabled = true;
+    setBridgeStatus(false, `No es troba la connexió amb ADB local (${bridgeUrl})`);
+    toastTop('No s\'ha pogut connectar amb el dispositiu Android.', 'error', 5000);
+    $('#device-info').classList.remove('show');
+    return;
+  }
+  deviceOk = data.connected;
+  statusEl.textContent = deviceOk ? 'Dispositiu connectat i autoritzat' : 'Cap dispositiu autoritzat detectat';
+  statusEl.className = deviceOk ? 'ok' : 'fail';
+  $('#btn-list').disabled = !deviceOk;
+  setBridgeStatus(true, `ADB local operatiu (${bridgeUrl})`);
+  if (deviceOk) {
+    toastTop('Dispositiu Android connectat i autoritzat.', 'ok', 5000);
+    loadDeviceInfo();
+  } else {
+    toastTop('Cap dispositiu Android autoritzat detectat.', 'error', 5000);
+    $('#device-info').classList.remove('show');
+  }
+}
+
+async function loadDeviceInfo() {
+  const info = await api('/api/device-info');
+  if (info.error) return;
+  const box = $('#device-info');
+  const rows = [
+    ['Model',      info.model],
+    ['Marca',      info.brand],
+    ['Android',    info.android],
+    ['SDK',        info.sdk],
+    ['Build',      info.build],
+    ['CPU',        info.cpu],
+    ['RAM',        info.ram],
+    ['Resolució',  info.resolution],
+    ['Número sèrie', info.serial],
+  ];
+  box.innerHTML = `<div class="di-title">${esc(info.model || 'Dispositiu')}</div>` +
+    rows.filter(([,v]) => v).map(([k,v]) =>
+      `<div class="di-row"><span class="di-key">${esc(k)}</span><span class="di-val">${esc(v)}</span></div>`
+    ).join('');
+  box.classList.add('show');
+}
+
+async function listApps() {
+  const data = await api('/api/list-apps');
+  if (data.error) { toast(data.error, 'error'); return; }
+  allApps = data;
+  renderApps(allApps);
+}
+
+async function detectForeground() {
+  const data = await api('/api/foreground');
+  if (data.error) { toast(data.error, 'error'); return; }
+  if (data.package) { selectPkg(data.package); }
+  else { toast('Cap app en foreground detectada', 'warn'); }
+}
+
+async function getInfo() {
+  if (!selectedPkg) return;
+  const data = await api(`/api/info?package=${encodeURIComponent(selectedPkg)}`);
+  if (data.error) { toast(data.error, 'error'); return; }
+  let text = `Package: ${data.package}\n\n`;
+  text += '══════ Google Play Store ══════\n';
+  if (data.play?.title) text += `Nom: ${data.play.title}\n`;
+  if (data.play?.description) text += `Descripció: ${data.play.description}\n`;
+  if (!data.play?.title && !data.play?.description) text += 'App no trobada a Google Play.\n';
+  text += '\n══════ APKMirror ══════\n';
+  if (data.apkmirror?.length) {
+    data.apkmirror.forEach(n => { text += `  • ${n}\n`; });
+  } else {
+    text += 'Cap resultat trobat.\n';
+  }
+  showModal(`Informació: ${data.package}`, text);
+
+  // Update resolved name in list
+  if (data.resolved_name) {
+    const app = allApps.find(a => a.pkg === data.package);
+    if (app) { app.name = data.resolved_name; renderApps(allApps); }
+  }
+}
+
+async function killProcess() {
+  if (!selectedPkg) return;
+  const data = await api('/api/kill', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({package: selectedPkg}),
+  });
+  toast(data.message || data.error, data.error ? 'error' : 'ok');
+}
+
+async function startProcess() {
+  if (!selectedPkg) return;
+  const data = await api('/api/start', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({package: selectedPkg}),
+  });
+  toast(data.message || data.error, data.error ? 'error' : 'ok');
+}
+
+async function uninstallPkg() {
+  if (!selectedPkg) return;
+  showConfirm(`Desinstal·lar ${selectedPkg}?`, async () => {
+    const data = await api('/api/uninstall', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({package: selectedPkg}),
+    });
+    toast(data.message || data.error, data.error ? 'error' : 'ok');
+    if (!data.error) markUninstalled(selectedPkg);
+  });
+}
+
+bridgeUrlInput.value = bridgeUrl;
+probeBridge();
+</script>
+</body>
+</html>
