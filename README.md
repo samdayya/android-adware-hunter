@@ -161,35 +161,37 @@ A la part superior del panell dret hi ha el camp **ADB local** amb el valor per 
 - Connectar el mòbil al PC per USB.
 - Acceptar el missatge d'autorització que apareix al mòbil.
 
-### 2. Verificar ADB al PC client
-```powershell
-adb devices
-```
-Ha de mostrar el dispositiu amb estat `device` (no `unauthorized`).
+### 2. Instal·lar i arrencar l'Agent (primera vegada)
 
-### 3. Instal·lar dependències del bridge
+Obre **PowerShell com a Administrador** i executa aquesta única comanda:
+
 ```powershell
-py -3 -m pip install flask
+$f="$env:TEMP\install_agent.ps1"; (New-Object Net.WebClient).DownloadFile("http://192.168.0.6:5000/install_agent.ps1",$f); & $f
 ```
 
-### 4. Descarregar el bridge actualitzat
-Obre al navegador o descarrega amb curl:
-```powershell
-curl http://192.168.0.6:5000/adb_bridge.py -o C:\temp\adb_bridge.py
-```
+L'assistent instal·larà automàticament:
+- Android Platform Tools (ADB) via `winget`
+- Python 3 via `winget`
+- Flask i flask-cors via `pip`
+- L'agent `adb_bridge.py` a `C:\temp`
 
-### 5. Iniciar el bridge
+Al final preguntarà si vols arrencar l'Agent immediatament.
+
+> El botó **"Connecta ADB local"** de la interfície web copia aquesta comanda al porta-retalls.
+
+### 3. Properes vegades (Agent ja instal·lat)
+
 ```powershell
 cd C:\temp
 py -3 adb_bridge.py
 ```
 
-### 6. Obrir la interfície web
+### 4. Obrir la interfície web
 ```
 http://192.168.0.6:5000
 ```
 
-### 7. Comprovar dispositiu
+### 5. Comprovar dispositiu
 Fer clic a **Comprovar dispositiu** a la capçalera. Si tot és correcte apareixerà un missatge verd i les dades del dispositiu.
 
 ---

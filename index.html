@@ -115,6 +115,7 @@
   <span id="status">No verificat</span>
   <div style="flex:1"></div>
   <button class="btn btn-outline" onclick="checkDevice()" style="width:auto;padding:6px 16px">Comprovar dispositiu</button>
+  <button class="btn btn-outline" onclick="restartService()" style="width:auto;padding:6px 16px;margin-left:8px" title="Reinicia el procés Python del servidor">Reiniciar servei</button>
 </header>
 
 <div class="progress"><div class="progress-bar" id="progress"></div></div>
@@ -261,28 +262,33 @@ function setBridgeStatus(ok, text) {
 }
 
 async function connectLocalAdb() {
-  const command = ['cd C:\\temp', 'py -3 adb_bridge.py'].join('\n');
+  const installCmd = '$f="$env:TEMP\\install_agent.ps1"; (New-Object Net.WebClient).DownloadFile("http://192.168.0.6:5000/install_agent.ps1",$f); & $f';
+  const runCmd = 'cd C:\\temp && py -3 adb_bridge.py';
   let copied = false;
   try {
-    await navigator.clipboard.writeText(command);
+    await navigator.clipboard.writeText(installCmd);
     copied = true;
   } catch {}
 
   const lines = [
-    'El navegador no pot executar programes locals directament per seguretat.',
+    '── Primera vegada (instal·lació automàtica) ──────────────',
     '',
-    'Passos a l\'ordinador client Windows:',
-    '1. Obre PowerShell.',
-    '2. Ves a C:\\temp.',
-    '3. Executa aquestes ordres:',
+    'Obre PowerShell com a Administrador i executa:',
     '',
-    command,
+    installCmd,
     '',
-    'Quan el bridge estigui actiu, torna a clicar "Comprovar dispositiu".'
+    'L\'assistent instal·larà ADB, Python, Flask i l\'Agent,',
+    'i arrencarà el bridge automàticament.',
+    '',
+    '── Properes vegades (bridge ja instal·lat) ───────────────',
+    '',
+    runCmd,
+    '',
+    'Quan el bridge estigui actiu, torna a clicar "Comprova dispositiu".',
   ];
 
   if (copied) {
-    lines.push('', 'Les ordres s\'han copiat al porta-retalls.');
+    lines.push('', '(La comanda d\'instal·lació s\'ha copiat al porta-retalls.)');
   }
 
   showModal('Connecta ADB local', lines.join('\n'));
@@ -377,6 +383,17 @@ function closeModal() { $('#modal').classList.remove('show'); }
 
 // ── API calls ──
 
+async function restartService() {
+  const data = await fetch('/api/restart', { method: 'POST' }).then(r => r.json()).catch(() => ({}));
+  if (data.ok) {
+    toast('Reiniciant el servei...', 'info', 3000);
+    await new Promise(r => setTimeout(r, 2500));
+    await checkDevice();
+  } else {
+    toast('Error en reiniciar el servei', 'error');
+  }
+}
+
 async function checkDevice() {
   const data = await api('/api/check-device');
   if (data.error) {
@@ -395,10 +412,10 @@ async function checkDevice() {
   $('#btn-list').disabled = !deviceOk;
   setBridgeStatus(true, `ADB local operatiu (${bridgeUrl})`);
   if (deviceOk) {
-    toastTop('Dispositiu Android connectat i autoritzat.', 'ok', 5000);
+    toast('Dispositiu Android connectat i autoritzat.', 'ok', 5000);
     loadDeviceInfo();
   } else {
-    toastTop('Cap dispositiu Android autoritzat detectat.', 'error', 5000);
+    toast('Cap dispositiu Android autoritzat detectat.', 'error', 5000);
     $('#device-info').classList.remove('show');
   }
 }

@@ -13,6 +13,10 @@ import subprocess
 import re
 import html as html_mod
 import urllib.request
+import os
+import sys
+import time
+import threading
 from flask import Flask, jsonify, request, send_from_directory
 
 app = Flask(__name__, static_folder=".", static_url_path="")
@@ -76,6 +80,27 @@ def extract_title(page: str | None) -> str | None:
 @app.route("/favicon.ico")
 def favicon():
     return "", 204
+
+
+@app.route("/api/restart", methods=["POST"])
+def api_restart():
+    def do_restart():
+        time.sleep(1)
+        subprocess.Popen([sys.executable] + sys.argv, cwd=os.getcwd())
+        os._exit(0)
+    threading.Thread(target=do_restart, daemon=True).start()
+    return jsonify({"ok": True})
+
+
+@app.route("/install_agent.ps1")
+def install_agent():
+    from flask import Response
+    with open("install_agent.ps1", "rb") as f:
+        content = f.read()
+    # Afegir BOM UTF-8 si no hi és: PowerShell llegeix el BOM i usa UTF-8 correctament
+    if not content.startswith(b"\xef\xbb\xbf"):
+        content = b"\xef\xbb\xbf" + content
+    return Response(content, mimetype="text/plain; charset=utf-8")
 
 
 @app.route("/")
