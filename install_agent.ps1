@@ -180,7 +180,7 @@ function CheckAll {
     }
 
     Write-Host ""
-    return $ok
+    return $oK
 }
 
 # ── inici ──
