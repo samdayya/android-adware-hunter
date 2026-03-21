@@ -69,19 +69,50 @@ function Get-PythonwPath {
 
 function InstallNssm {
     if (Test-Path $NSSM_PATH) { return }
-    INFO "Descarregant NSSM (gestor de serveis)..."
-    $zip = "$env:TEMP\nssm.zip"
-    try {
-        (New-Object Net.WebClient).DownloadFile("https://nssm.cc/release/nssm-2.24.zip", $zip)
-        Expand-Archive $zip -DestinationPath "$env:TEMP\nssm_ext" -Force
-        Copy-Item "$env:TEMP\nssm_ext\nssm-2.24\win64\nssm.exe" $NSSM_PATH -Force
-        Remove-Item $zip, "$env:TEMP\nssm_ext" -Recurse -Force -ErrorAction SilentlyContinue
-        OK "NSSM descarregat a $NSSM_PATH"
-    } catch {
-        ERR "No s'ha pogut descarregar NSSM: $_"
-        Read-Host "  Prem ENTER per sortir"
-        exit 1
+
+    #Intent 1: winget
+    INFO "Instal·lant NSSM via winget..."
+    winget install NSSM.NSSM --accept-source-agreements --accept-package-agreements --silent 2>&1 | Out-Null
+    RefreshPath
+    $nssmCmd = Get-Command nssm -ErrorAction SilentlyContinue
+    if ($nssmCmd) { $wingetNssm = $nssmCmd.Source } else { $wingetNssm = $null }
+    if ($wingetNssm) {
+        Copy-Item $wingetNssm $NSSM_PATH -Force
+        OK "NSSM instal·lat via winget"
+        return
     }
+
+    # Intent 2: descàrrega directa (múltiples fonts)
+    $urls = @(
+        "https://nssm.cc/release/nssm-2.24.zip",
+        "https://github.com/nicholasgasior/nssm-mirror/raw/main/nssm-2.24.zip"
+    )
+    $zip = "$env:TEMP\nssm.zip"
+    foreach ($url in $urls) {
+        INFO "Provant descàrrega: $url"
+        try {
+            (New-Object Net.WebClient).DownloadFile($url, $zip)
+            Expand-Archive $zip -DestinationPath "$env:TEMP\nssm_ext" -Force
+            $exe = Get-ChildItem "$env:TEMP\nssm_ext" -Recurse -Filter "nssm.exe" |
+                   Where-Object { $_.FullName -match "win64" } |
+                   Select-Object -First 1
+            if (-not $exe) {
+                $exe = Get-ChildItem "$env:TEMP\nssm_ext" -Recurse -Filter "nssm.exe" | Select-Object -First 1
+            }
+            if ($exe) {
+                Copy-Item $exe.FullName $NSSM_PATH -Force
+                Remove-Item $zip, "$env:TEMP\nssm_ext" -Recurse -Force -ErrorAction SilentlyContinue
+                OK "NSSM descarregat a $NSSM_PATH"
+                return
+            }
+        } catch {
+            INFO "Fallada: $_"
+        }
+    }
+
+    ERR "No s'ha pogut obtenir NSSM per cap via. Comprova la connexió a internet."
+    Read-Host "  Prem ENTER per sortir"
+    exit 1
 }
 
 function RegisterService {
@@ -154,8 +185,6 @@ function CheckAll {
 
 # ── inici ──
 Banner
-$shortcutPath = "$env:USERPROFILE\Desktop\Android Adware Hunter PRO.lnk"
-$shortcutContent = '$f="$env:TEMP\install_agent.ps1"; (New-Object Net.WebClient).DownloadFile("http://192.168.0.6:5000/install_agent.ps1",$f); & $f'
 
 $allOk = CheckAll
 
@@ -264,30 +293,6 @@ if ($allOk) {
     Write-Host "  ║   Instal·lació completada!                   ║" -ForegroundColor Green
     Write-Host "  ╚══════════════════════════════════════════════╝" -ForegroundColor Green
     Write-Host ""
-
-    # ── Accés directe (només si no existeix) ──
-    if (-not (Test-Path $shortcutPath)) {
-        $respShortcut = Read-Host "  Vols crear un acces directe a l'escriptori? [S/n]"
-        if ($respShortcut -eq "" -or $respShortcut -match "^[Ss]") {
-            $encoded = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($shortcutContent))
-            $ws = New-Object -ComObject WScript.Shell
-            $lnk = $ws.CreateShortcut($shortcutPath)
-            $lnk.TargetPath = "powershell.exe"
-            $lnk.Arguments = "-NoProfile -ExecutionPolicy Bypass -EncodedCommand $encoded"
-            $lnk.WorkingDirectory = $env:USERPROFILE
-            $lnk.WindowStyle = 1
-            $lnk.Description = "Inicia l'Agent ADB per Android Adware Hunter PRO"
-            $lnk.IconLocation = "powershell.exe,0"
-            $lnk.Save()
-            OK "Acces directe creat a: $shortcutPath"
-            INFO "Fes doble clic sobre ell per iniciar l'Agent en properes sessions."
-        } else {
-            INFO "No s'ha creat l'acces directe."
-            INFO "Properes vegades executa manualment:"
-            Write-Host "            cd $BRIDGE_DIR && py -3 adb_bridge.py" -ForegroundColor Gray
-        }
-        Write-Host ""
-    }
 }
 
 # ── Arrancar ──
