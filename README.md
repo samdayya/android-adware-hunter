@@ -43,6 +43,7 @@ Eina web per detectar, analitzar i eliminar aplicacions sospitoses d'un disposit
 | `server.py` | Servidor Linux | Backend Flask central. Serveix la web i l'API d'informació d'apps. |
 | `index.html` | Servidor Linux | Interfície web completa (HTML/CSS/JS). |
 | `adb_bridge.py` | PC client (Windows) | Agent local que executa les comandes ADB i les exposa via HTTP. |
+| `install_agent.ps1` | Servidor Linux | Wizard PowerShell d'instal·lació i gestió del servei Windows. |
 | `README.md` | Servidor Linux | Aquest document. |
 
 ---
@@ -119,6 +120,22 @@ Ha d'aparèixer:
 ADB Local Bridge on http://127.0.0.1:5038
 ```
 
+### Execució com a servei Windows (instal·lació automàtica)
+
+L'instal·lador configura `adb_bridge.py` com a **servei Windows real** utilitzant [NSSM](https://nssm.cc/) (`C:\temp\nssm.exe`).
+
+- **Inici:** Automàtic (arrenca amb Windows, sense necessitat de login)
+- **Nom del servei:** `AdbBridgeAgent`
+- **Log:** `C:\temp\adb_bridge.log` (rotació automàtica a 1 MB)
+- **Gestió:** des de `services.msc` o PowerShell com a Administrador:
+
+```powershell
+Start-Service AdbBridgeAgent
+Stop-Service AdbBridgeAgent
+Restart-Service AdbBridgeAgent
+Get-Service AdbBridgeAgent
+```
+
 ### Endpoints del bridge
 
 | Mètode | Ruta | Descripció |
@@ -169,11 +186,16 @@ Obre **PowerShell com a Administrador** i executa aquesta única comanda:
 $f="$env:TEMP\install_agent.ps1"; (New-Object Net.WebClient).DownloadFile("http://192.168.0.6:5000/install_agent.ps1",$f); & $f
 ```
 
+Si el PowerShell no és Administrador, l'assistent demanarà elevació (UAC) automàticament.
+
 L'assistent instal·larà automàticament:
 - Android Platform Tools (ADB) via `winget`
 - Python 3 via `winget`
 - Flask i flask-cors via `pip`
 - L'agent `adb_bridge.py` a `C:\temp`
+- **NSSM** (`C:\temp\nssm.exe`) per registrar el servei Windows
+- El servei **`AdbBridgeAgent`** (inici automàtic amb Windows)
+- Un accés directe a l'escriptori (opcional)
 
 Al final preguntarà si vols arrencar l'Agent immediatament.
 
@@ -181,9 +203,12 @@ Al final preguntarà si vols arrencar l'Agent immediatament.
 
 ### 3. Properes vegades (Agent ja instal·lat)
 
+Fes doble clic a l'accés directe **Android Adware Hunter PRO** de l'escriptori. L'script verificarà que tots els components estan correctes i et preguntarà si vols arrancar el servei.
+
+O bé, directament des de PowerShell com a Administrador:
+
 ```powershell
-cd C:\temp
-py -3 adb_bridge.py
+Start-Service AdbBridgeAgent
 ```
 
 ### 4. Obrir la interfície web
